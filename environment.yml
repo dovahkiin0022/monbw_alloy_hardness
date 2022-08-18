@@ -1,4 +1,4 @@
-name: compare_representations
+name: monbw_alloy_hardness
 channels:
   - pytorch
   - defaults

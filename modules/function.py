@@ -13,6 +13,30 @@ def check_cuda():
     cuda = False
   return cuda
 
+def pymatgen_comp(comp_list):
+  return [mg.Composition(x) for x in comp_list]
+
+def comp_to_vec(pymatgen_comps):
+  """ Takes a list of compositions (in either Pymatgen or string format) and turns it into a vector 
+  with elements arranged in alphabetical order"""
+
+
+  all_eles = []
+  for c in pymatgen_comps:
+    if not type(c) == mg.Composition:
+      c = mg.Composition(c)
+    all_eles += list(c.get_el_amt_dict().keys())
+  eles = np.array(sorted(list(set(all_eles))))
+  all_vecs = np.zeros([len(pymatgen_comps), len(eles)])
+  for i, c in enumerate(pymatgen_comps):
+    if not type(c) == mg.Composition:
+      c = mg.Composition(c)
+    for k, v in c.get_el_amt_dict().items():
+      j = np.argwhere(eles == k)
+      all_vecs[i, j] = v
+  #all_vecs = all_vecs / np.sum(all_vecs, axis=1).reshape(-1, 1)
+  return all_vecs, eles
+
 def special_formatting(comp):
   """take pymatgen compositions and does string formatting"""
   comp_d = comp.get_el_amt_dict()
@@ -22,6 +46,22 @@ def special_formatting(comp):
     string += k + '$_{' + '{}'.format(round(comp_d[k]/denom,3)) + '}$'
   return string
 
+def image(i,property_list,element_name,RC):#PTR psuedoimage using special formula
+    #i0='Mo.5Nb.5'
+    #i=i0.split(' ')[0]
+    X= [[[0.0 for ai in range(18)]for aj in range(9)] for ak in range(1) ]  
+    tx1_element=re.findall('[A-Z][a-z]?', i)#[B, Fe, P,No]
+    tx2_temp=re.findall('[0-9.]+', i)#[$_{[50]}$, ] [50 30 20]
+    tx2_value=[float(re.findall('[0-9.]+', i_tx2)[0]) for i_tx2 in tx2_temp]
+    for j in range(len(tx2_value)):
+        index=int(property_list[element_name.index(tx1_element[j])][1])#atomic number
+        xi=int(RC[index-1][1])#row num
+        xj=int(RC[index-1][2])#col num
+        X[0][xi-1][xj-1]=tx2_value[j]
+
+    #properties at the first row, from 5th to 8th column for hardness
+    X = np.array(X)
+    return X
 
 def image_gfa(i,property_list,element_name,RC):#PTR psuedoimage using special formula
     #i0='Mo.5Nb.5'
@@ -41,6 +81,21 @@ def image_gfa(i,property_list,element_name,RC):#PTR psuedoimage using special fo
     #properties at the first row, from 5th to 8th column for hardness
     X = np.array(X)
     return X
+
+
+def decode_img(image,property_list,element_name,RC):
+  """from image, get the composition"""
+  image = image.reshape(-1,1,9,18)
+  row,col = np.nonzero(image)[2:]
+  comp_dict = {}
+  props = []
+  for j in range(len(row)):
+    for r in RC:
+      if int(r[1]) == row[j]+1 and int(r[2]) == col[j]+1:
+        for i in range(len(property_list)):
+         if int(property_list[i][1]) == int(r[0]) and image[0][0][row[j]][col[j]] >= 0.0:
+            comp_dict[element_name[i]] = image[0][0][row[j]][col[j]]
+  return mg.Composition(comp_dict)
 
 
 def PTR(i,property_list,element_name,Z_row_column):#periodical table representation
@@ -68,8 +123,10 @@ def PTR(i,property_list,element_name,Z_row_column):#periodical table representat
 
     return [X,X_BMG],Y 
 
-class data_generator_gfa(object):
-    def __init__(self, comps, gfa_dataset):
+
+
+class data_generator(object):
+    def __init__(self, comps,property_list,element_name,RC):
 
         #with open(csv_file, 'r') as fid:
             #l = fid.readlines()
@@ -77,10 +134,21 @@ class data_generator_gfa(object):
         #data.remove('Composition')
 
         #remove single elements from dataset, want only HEAs. Also keep unqiue compositions
+
+        all_eles = []
+        for c in comps:
+            all_eles += list(c.get_el_amt_dict().keys())
+        eles = np.array(sorted(list(set(all_eles))))
+
+        self.elements = eles
+        self.size = len(eles)
         self.length = len(comps)
+
+        sp_comps = [special_formatting(x) for x in comps]
+
         all_imgs = []
-        for i in range(len(gfa_dataset)):
-          c_img = image_gfa(gfa_dataset[i])
+        for i in range(len(sp_comps)):
+          c_img = image(sp_comps[i],property_list,element_name,RC)
           all_imgs.append(c_img)
         
         self.real_data = np.array(all_imgs).reshape(-1,1,9,18)
@@ -89,7 +157,15 @@ class data_generator_gfa(object):
         idx = np.random.choice(np.arange(self.length), N, replace=False)
         data = self.real_data[idx]
 
-        return np.array(data, dtype=np.float32)
+        return np.array(data, dtype=np.float32).reshape(-1,1,9,18)
+    
+    def elements(self):
+      return eles
+
+
+def stratify_data(data, min, max, by):
+  samples_per_bin, bins, = np.histogram(data, bins=np.arange(min,max,by))
+  return np.digitize(data,bins) 
 
 
 
