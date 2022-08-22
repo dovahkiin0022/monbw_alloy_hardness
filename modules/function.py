@@ -168,4 +168,26 @@ def stratify_data(data, min, max, by):
   return np.digitize(data,bins) 
 
 
+def get_elem_count(comp_list):
+  elem_dict = {}
+  for c in comp_list:
+    if not type(c) == mg.Composition:
+      c = mg.Composition(c)
+      for elems in c.get_el_amt_dict().keys():
+        if elems not in elem_dict.keys():
+          elem_dict[elems] = 1
+        else:
+          elem_dict[elems] += 1
+  return elem_dict
 
+def get_number_of_components(comp_list):
+  count_list = []
+  for c in comp_list:
+    if not type(c) == mg.Composition:
+      c = mg.Composition(c)
+      count_list.append(len(list(c.get_el_amt_dict().keys())))
+  return count_list
+
+def get_comp_count_over_bins(vals, nbins=10):
+    max_dig = len(str(int(max(abs(x) for x in vals))))
+    return max_dig, np.linspace(np.round(vals.min()),np.round(vals.max()), nbins)
