@@ -19,8 +19,6 @@ def pymatgen_comp(comp_list):
 def comp_to_vec(pymatgen_comps):
   """ Takes a list of compositions (in either Pymatgen or string format) and turns it into a vector 
   with elements arranged in alphabetical order"""
-
-
   all_eles = []
   for c in pymatgen_comps:
     if not type(c) == mg.Composition:
@@ -191,3 +189,43 @@ def get_number_of_components(comp_list):
 def get_comp_count_over_bins(vals, nbins=10):
     max_dig = len(str(int(max(abs(x) for x in vals))))
     return max_dig, np.linspace(np.round(vals.min()),np.round(vals.max()), nbins)
+
+
+class data_generator_vec(object):
+    def __init__(self, comps, el_list = []):
+
+        #with open(csv_file, 'r') as fid:
+            #l = fid.readlines()
+        #data = [x.strip().split(',')[1] for x in l]
+        #data.remove('Composition')
+
+        #remove single elements from dataset, want only HEAs. Also keep unqiue compositions
+
+        if len(el_list) == 0:
+          all_eles = []
+          for c in comps:
+            all_eles += list(c.get_el_amt_dict().keys())
+          eles = np.array(sorted(list(set(all_eles))))
+        else:
+          eles = np.array(el_list)
+          
+        self.elements = eles
+        self.size = len(eles)
+        self.length = len(comps)
+
+        all_vecs = np.zeros([len(comps), len(self.elements)])
+        for i, c in enumerate(comps):
+            for k, v in c.get_el_amt_dict().items():
+                j = np.argwhere(eles == k)
+                all_vecs[i, j] = v
+        all_vecs = all_vecs / np.sum(all_vecs, axis=1).reshape(-1, 1)
+        self.real_data = np.array(all_vecs, dtype=np.float32)
+
+    def sample(self, N):
+        idx = np.random.choice(np.arange(self.length), N, replace=False)
+        data = self.real_data[idx]
+
+        return np.array(data, dtype=np.float32),idx
+    
+    def elements(self):
+      return eles
